@@ -1,0 +1,11 @@
+[package]
+name = "DosHashGatedBucket"
+edition = "2024.beta"
+license = "Cascade DOL"
+authors = ["Cascade Foundation (dos@cascade.foundation)"]
+
+[dependencies]
+Walrus = { git = "https://github.com/MystenLabs/walrus.git", subdir = "contracts/walrus", rev = "main" }
+
+[addresses]
+hash_gated_bucket = "0x0"
