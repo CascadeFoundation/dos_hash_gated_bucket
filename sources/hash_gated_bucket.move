@@ -78,6 +78,10 @@ public fun borrow_blob(
     blob_opt.borrow()
 }
 
+public fun blob_exists(self: &HashGatedBucket, blob_id: u256): bool {
+    self.blobs.borrow(blob_id).is_some()
+}
+
 public fun remove_blob(
     self: &mut HashGatedBucket,
     cap: &HashGatedBucketAdminCap,
