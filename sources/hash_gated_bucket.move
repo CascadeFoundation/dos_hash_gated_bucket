@@ -1,4 +1,4 @@
-module hash_gated_bucket::hash_gated_bucket;
+module dos_hash_gated_bucket::hash_gated_bucket;
 
 use sui::balance::Balance;
 use sui::coin::Coin;

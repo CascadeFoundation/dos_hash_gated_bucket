@@ -8,4 +8,4 @@ authors = ["Cascade Foundation (dos@cascade.foundation)"]
 Walrus = { git = "https://github.com/MystenLabs/walrus.git", subdir = "contracts/walrus", rev = "main" }
 
 [addresses]
-hash_gated_bucket = "0x0"
+dos_hash_gated_bucket = "0x0"
