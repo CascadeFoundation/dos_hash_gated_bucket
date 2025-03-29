@@ -1,6 +1,6 @@
 module dos_hash_gated_bucket::hash_gated_bucket;
 
-use sui::balance::Balance;
+use sui::balance::{Self, Balance};
 use sui::coin::Coin;
 use sui::table::{Self, Table};
 use wal::wal::WAL;
@@ -28,14 +28,13 @@ const ENotInExtensionUnlockWindow: u64 = 1;
 const EInvalidAdminCap: u64 = 2;
 
 public fun new(
-    balance: Balance<WAL>,
     extension_epochs: u32,
     extension_unlock_window: u32,
     ctx: &mut TxContext,
 ): (HashGatedBucket, HashGatedBucketAdminCap) {
     let bucket = HashGatedBucket {
         id: object::new(ctx),
-        balance: balance,
+        balance: balance::zero(),
         extension_epochs: extension_epochs,
         extension_unlock_window: extension_unlock_window,
         blobs: table::new(ctx),
@@ -47,6 +46,20 @@ public fun new(
     };
 
     (bucket, bucket_admin_cap)
+}
+
+public fun deposit_wal(self: &mut HashGatedBucket, coin: Coin<WAL>) {
+    self.balance.join(coin.into_balance());
+}
+
+public fun withdraw_wal(
+    self: &mut HashGatedBucket,
+    cap: &HashGatedBucketAdminCap,
+    value: u64,
+    ctx: &mut TxContext,
+): Coin<WAL> {
+    assert!(cap.bucket_id == self.id.to_inner(), EInvalidAdminCap);
+    self.balance.split(value).into_coin(ctx)
 }
 
 public fun add_blob(self: &mut HashGatedBucket, cap: &HashGatedBucketAdminCap, blob: Blob) {
