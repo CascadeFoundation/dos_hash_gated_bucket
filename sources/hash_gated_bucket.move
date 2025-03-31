@@ -24,8 +24,10 @@ public struct HashGatedBucketAdminCap has key, store {
     bucket_id: ID,
 }
 
-const ENotInExtensionUnlockWindow: u64 = 1;
+const EBlobKeyNotExists: u64 = 4;
+const EBlobNotInBucket: u64 = 3;
 const EInvalidAdminCap: u64 = 2;
+const ENotInExtensionUnlockWindow: u64 = 1;
 
 public fun new(
     extension_epochs: u32,
@@ -78,10 +80,6 @@ public fun borrow_blob(
     blob_opt.borrow()
 }
 
-public fun blob_exists(self: &HashGatedBucket, blob_id: u256): bool {
-    self.blobs.borrow(blob_id).is_some()
-}
-
 public fun remove_blob(
     self: &mut HashGatedBucket,
     cap: &HashGatedBucketAdminCap,
@@ -123,7 +121,19 @@ public fun renew_blob_with_wal(
     system.extend_blob(blob_mut, extension_epochs, payment_coin);
 }
 
-public fun reserve_blob(self: &mut HashGatedBucket, cap: &HashGatedBucketAdminCap, blob_id: u256) {
+public fun reserve_blob_key(
+    self: &mut HashGatedBucket,
+    cap: &HashGatedBucketAdminCap,
+    blob_id: u256,
+) {
     assert!(cap.bucket_id == self.id.to_inner(), EInvalidAdminCap);
     self.blobs.add(blob_id, option::none());
+}
+
+public fun assert_blob_key_exists(self: &HashGatedBucket, blob_id: u256) {
+    assert!(self.blobs.contains(blob_id), EBlobKeyNotExists);
+}
+
+public fun assert_contains_blob(self: &HashGatedBucket, blob_id: u256) {
+    assert!(self.blobs.borrow(blob_id).is_some(), EBlobNotInBucket);
 }
