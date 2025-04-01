@@ -1,16 +1,14 @@
 module dos_hash_gated_bucket::hash_gated_bucket;
 
-use sui::balance::{Self, Balance};
 use sui::coin::Coin;
 use sui::table::{Self, Table};
+use sui::transfer::Receiving;
 use wal::wal::WAL;
 use walrus::blob::Blob;
 use walrus::system::System;
 
 public struct HashGatedBucket has key, store {
     id: UID,
-    // WAL balance for renewals.
-    balance: Balance<WAL>,
     // The number of epochs to extend a blob by.
     extension_epochs: u32,
     // The number of epochs before expiration when an extension is allowed.
@@ -27,7 +25,6 @@ public struct HashGatedBucketAdminCap has key, store {
 const EBlobKeyNotExists: u64 = 4;
 const EBlobNotInBucket: u64 = 3;
 const EInvalidAdminCap: u64 = 2;
-const ENotInExtensionUnlockWindow: u64 = 1;
 
 public fun new(
     extension_epochs: u32,
@@ -36,7 +33,6 @@ public fun new(
 ): (HashGatedBucket, HashGatedBucketAdminCap) {
     let bucket = HashGatedBucket {
         id: object::new(ctx),
-        balance: balance::zero(),
         extension_epochs: extension_epochs,
         extension_unlock_window: extension_unlock_window,
         blobs: table::new(ctx),
@@ -50,26 +46,13 @@ public fun new(
     (bucket, bucket_admin_cap)
 }
 
-public fun deposit_wal(self: &mut HashGatedBucket, coin: Coin<WAL>) {
-    self.balance.join(coin.into_balance());
-}
-
-public fun withdraw_wal(
-    self: &mut HashGatedBucket,
-    cap: &HashGatedBucketAdminCap,
-    value: u64,
-    ctx: &mut TxContext,
-): Coin<WAL> {
-    assert!(cap.bucket_id == self.id.to_inner(), EInvalidAdminCap);
-    self.balance.split(value).into_coin(ctx)
-}
-
+// Add a blob to the bucket.
 public fun add_blob(self: &mut HashGatedBucket, cap: &HashGatedBucketAdminCap, blob: Blob) {
     assert!(cap.bucket_id == self.id.to_inner(), EInvalidAdminCap);
-    let blob_opt_mut = self.blobs.borrow_mut(blob.blob_id());
-    blob_opt_mut.fill(blob);
+    self.blobs.borrow_mut(blob.blob_id()).fill(blob);
 }
 
+// Borrow a reference to a stored blob.
 public fun borrow_blob(
     self: &HashGatedBucket,
     cap: &HashGatedBucketAdminCap,
@@ -80,6 +63,18 @@ public fun borrow_blob(
     blob_opt.borrow()
 }
 
+// Receive a blob that's been sent directly to the bucket, and add it to the bucket.
+public fun receive_and_add_blob(
+    self: &mut HashGatedBucket,
+    cap: &HashGatedBucketAdminCap,
+    blob_to_receive: Receiving<Blob>,
+) {
+    assert!(cap.bucket_id == self.id.to_inner(), EInvalidAdminCap);
+    let blob = transfer::public_receive(&mut self.id, blob_to_receive);
+    self.blobs.borrow_mut(blob.blob_id()).fill(blob);
+}
+
+// Remove a blob from the bucket.
 public fun remove_blob(
     self: &mut HashGatedBucket,
     cap: &HashGatedBucketAdminCap,
@@ -89,26 +84,8 @@ public fun remove_blob(
     self.blobs.remove(blob_id).destroy_some()
 }
 
+// Renew a stored Blob with the provided WAL coin.
 public fun renew_blob(
-    self: &mut HashGatedBucket,
-    blob_id: u256,
-    system: &mut System,
-    ctx: &mut TxContext,
-) {
-    let blob_opt_mut = self.blobs.borrow_mut(blob_id);
-    let blob_mut = blob_opt_mut.borrow_mut();
-
-    assert!(
-        system.epoch() >= blob_mut.end_epoch() - self.extension_unlock_window,
-        ENotInExtensionUnlockWindow,
-    );
-
-    let mut payment_coin = self.balance.withdraw_all().into_coin(ctx);
-    system.extend_blob(blob_mut, self.extension_epochs, &mut payment_coin);
-    self.balance.join(payment_coin.into_balance());
-}
-
-public fun renew_blob_with_wal(
     self: &mut HashGatedBucket,
     blob_id: u256,
     extension_epochs: u32,
@@ -117,7 +94,6 @@ public fun renew_blob_with_wal(
 ) {
     let blob_opt_mut = self.blobs.borrow_mut(blob_id);
     let blob_mut = blob_opt_mut.borrow_mut();
-
     system.extend_blob(blob_mut, extension_epochs, payment_coin);
 }
 
